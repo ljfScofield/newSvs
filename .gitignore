@@ -1,0 +1,11 @@
+build/
+dist/
+html/
+
+release/
+
+*.pyc
+*.swo
+*.swp
+*.py~
+*.un~
