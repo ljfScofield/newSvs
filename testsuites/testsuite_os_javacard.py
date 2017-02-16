@@ -43,13 +43,13 @@ class ALG_PSEUDO_RANDOM(object):
         api_gp.select(instance)
 
     def generateData(self, lgth):
-        r, sw = api_pcsc.send('00000000%.2X' % (lgth&0xFF,))
+        r, sw = api_pcsc.send('00000000%.2X' % (lgth&0xFF,), expectSW='9000', name='generate Data')
         return r
 
     def setseed(self, seed):
         ''' seed should be hexdigits string '''
         lgth = len(seed)/2
-        r, sw = api_pcsc.send('00010000%.2X%s' % (lgth&0xFF, seed.upper()))
+        r, sw = api_pcsc.send('00010000%.2X%s' % (lgth&0xFF, seed.upper()), expectSW='9000', name='set SEED')
         return self # return self to enable chain-operation
 
 class TestCase_ALG_PSEUDO_RANDOM(api_unittest.TestCase):
@@ -141,12 +141,12 @@ class ALG_SECURE_RANDOM(object):
         api_gp.select(instance)
 
     def generateData(self, lgth):
-        return api_pcsc.send('00000000%.2X' % (lgth&0xFF), name='generateData')
+        return api_pcsc.send('00000000%.2X' % (lgth&0xFF), expectSW='9000', name='generateData')
 
     def setseed(self, seed):
         ''' seed should be hexdigits string '''
         lgth = len(seed)/2
-        r, sw = api_pcsc.send('00010000%.2X%s' % (lgth&0xFF, seed.upper()), name='setseed')
+        r, sw = api_pcsc.send('00010000%.2X%s' % (lgth&0xFF, seed.upper()), expectSW='9000', name='setseed')
         return self # return self to enable chain-operation
 
 class TestCase_ALG_SECURE_RANDOM(api_unittest.TestCase):

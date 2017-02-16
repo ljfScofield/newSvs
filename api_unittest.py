@@ -177,8 +177,9 @@ def gettestsuite():
             #module = importmodule(open(x, 'rb').read(), name, add_to_sys_modules)
             module = importmodule1(name, open(x, 'rb'), x)
         except Exception as e:
-            Logger.error("Invalid test script file: %s , please correct its synatx error:\n%s" % (x, str(e)))
-            continue
+            error = "Invalid test script file: %s\nplease correct its synatx error:\n%s" % (x, str(e))
+            Logger.error(error)
+            raise SyntaxError(error)
 
         suite = TestLoader().loadTestsFromModule(module)
         if suite:

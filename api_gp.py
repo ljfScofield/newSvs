@@ -86,7 +86,7 @@ def getBERTLVlengthfield(length):
     else:
         raise ValueError("Too big a value! %d (%X) can't fit in an ISO/IEC 7816, BER-TLV length field" % (length, length))
 
-def select (aid, expectData='', expectSW='9000', info='', name='GP, Select AID', header='00A40400'):
+def select(aid, expectData='', expectSW='9000', info='', name='GP, Select AID', header='00A40400'):
     ''' Select File (INS : 'A4')
     '''
     return api_pcsc.send(header+lv(aid), expectData=expectData, expectSW=expectSW, info=info, name=name)

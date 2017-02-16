@@ -16,6 +16,7 @@ Author: wg@china-xinghan.com
 
 import binascii, time, logging, unittest
 import smartcard
+import smartcard.scard
 import api_util
 import api_config
 
@@ -108,11 +109,14 @@ def getreaderlist():
     return smartcard.System.readers()
 
 
-def disconnect():
+def disconnect(cold=True):
     ''' disconnect with the card
     '''
+    disposition = smartcard.scard.SCARD_UNPOWER_CARD if cold else smartcard.scard.SCARD_RESET_CARD
+
     conn = getconnection()
     if conn:
+        conn.disposition = disposition
         conn.disconnect()
         # Exception AttributeError: AttributeError("'NoneType' object has no attribute 'se
         # tChanged'",) in <bound method PCSCCardConnection.__del__ of <smartcard.pcsc.PCSC
@@ -134,18 +138,20 @@ def getatr():
         raise PCSCException('No existed connection! Please connect reader!')
 
 
-def connectreader(name=''):
+def connectreader(name='', cold=True):
     ''' Connect the specific reader.
         name:   string, reader name, example: 'OMNIKEY CardMan 5x21 0'. If not given, try to
                 connect anyone avaiable.
     '''
+    name = name if name else api_config.get_default_pcsc_reader_name()
+    disposition = smartcard.scard.SCARD_UNPOWER_CARD if cold else smartcard.scard.SCARD_RESET_CARD
     conn = None
     if name:
         for x in smartcard.System.readers():
             if str(x) == name:
                 try:
                     conn = x.createConnection()
-                    conn.connect()
+                    conn.connect(disposition=disposition)
                 except Exception as e:
                     raise PCSCException(str(e))
                 break # if connected
@@ -153,7 +159,7 @@ def connectreader(name=''):
         for x in smartcard.System.readers():
             try:
                 conn = x.createConnection()
-                conn.connect()
+                conn.connect(disposition=disposition)
             except smartcard.Exceptions.NoCardException, e:
                 continue
             except smartcard.Exceptions.CardConnectionException, e:
@@ -167,14 +173,16 @@ def connectreader(name=''):
         raise PCSCException('Smartcard not found! Please check if already inserted!')
 
 
-def reset():
+def reset(cold=True):
     ''' Reset the card, actually combines a 'disconnect' & a 'connect' operation.
     '''
     conn = getconnection()
+    disposition = smartcard.scard.SCARD_UNPOWER_CARD if cold else smartcard.scard.SCARD_RESET_CARD
 
     if conn:
+        conn.disposition = disposition
         conn.disconnect()
-        conn.connect()
+        conn.connect(disposition=disposition)
         Logger.debug('reset smart card reader, ' + getatr())
     else:
         raise PCSCException('No existed connection! Please connect reader!')
@@ -348,17 +356,18 @@ class TestModule(unittest.TestCase):
 
     def test_00A4(self):
         for x in range(10):
-            connectreader()
+            connectreader(cold=True)
             r, sw = send('00A4040000')
             assert type(r) == type('')
             assert sw == '9000'
-            disconnect()
+            disconnect(cold=True)
 
-            connectreader()
+            connectreader(cold=True)
             r, sw = send('00A4040000')
             assert type(r) == type('')
             assert sw == '9000'
-            disconnect()	
+            disconnect(cold=False)
+
 
 
 #-------------------------------------------------------------------------------

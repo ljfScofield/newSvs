@@ -35,7 +35,7 @@ def test_exe_path():
     # test if path to svs.exe contains special characters && chinese
     # For html url, we don't want to get into the trouble of handling non-english characters
     p = os.path.abspath(os.getcwd())
-    r = re.compile(r'^[0-9a-zA-Z.\\:]+$')
+    r = re.compile(r'^[0-9a-zA-Z_.\\:]+$')
     m = r.match(p)
     if m:
         return True
@@ -43,8 +43,13 @@ def test_exe_path():
         logging.error('Please DO NOT place svs.exe in non-english path: %s' % p)
         return False
 
+def set_default_pcsc_reader_name(name):
+    CONFIG.set('api_pcsc', 'defaultreadername', name) # this setting will not be saved to .ini file.
 
 self_test()
+
+def get_default_pcsc_reader_name():
+    return CONFIG.get('api_pcsc', 'defaultreadername')
 
 ################################################################################
 if __name__=='__main__':

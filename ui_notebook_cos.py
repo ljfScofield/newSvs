@@ -129,6 +129,7 @@ class TestsuiteTreeCtrl(CT.CustomTreeCtrl):
                  ):
         CT.CustomTreeCtrl.__init__(self, parent, id, pos, size, style, agwStyle)
         self.SetBackgroundColour(wx.WHITE)
+        self.rootlabel = rootlabel
 
         il = wx.ImageList(16, 16)
         for items in ArtIDs[1:-1]:
@@ -147,7 +148,7 @@ class TestsuiteTreeCtrl(CT.CustomTreeCtrl):
             self.SetPyData(level1, v) # v: file name, abspath, python module, python testsuite
             self.SetItemImage(level1, 0, CT.TreeItemIcon_Normal)
             self.SetItemImage(level1, 1, CT.TreeItemIcon_Expanded)
-            level1.Check()
+            #level1.Check()
 
             name, abspath, module, suite = v
             for clazz in suite:
@@ -155,17 +156,70 @@ class TestsuiteTreeCtrl(CT.CustomTreeCtrl):
                 self.SetPyData(level2, clazz)
                 self.SetItemImage(level2, 0, CT.TreeItemIcon_Normal)
                 self.SetItemImage(level2, 1, CT.TreeItemIcon_Expanded)
-                level2.Check()
+                #level2.Check()
 
                 for test_ in clazz:
                     level3 = self.AppendItem(level2, test_._testMethodName)
                     self.SetPyData(level3, test_)
-                self.Expand(level2)
+                #self.Expand(level2)
             self.Expand(level1)
 
-        #self.eventdict = { 'EVT_TREE_ITEM_CHECKED': self.OnItemCheck, 'EVT_TREE_ITEM_CHECKING': self.OnItemChecking, }
         self.Expand(self.root)
-        self.root.Check()
+        #self.root.Check()
+
+        self.Bind(wx.EVT_CONTEXT_MENU, self.OnContextMenu)
+
+    def OnContextMenu(self, event):
+        # Popup menu: reload
+        if not hasattr(self, "popupID1"):
+            self.popupID1 = wx.NewId()
+            self.Bind(wx.EVT_MENU, self.OnPopup1, id=self.popupID1)
+
+        menu = wx.Menu() # make a menu
+        item = wx.MenuItem(menu, self.popupID1, "Reload") # Show how to put an icon in the menu
+        menu.AppendItem(item)
+
+        self.PopupMenu(menu)
+        menu.Destroy()
+
+    def reload(self, testsuites):
+        self.DeleteAllItems()
+
+        label = self.rootlabel if testsuites else 'No Testsuite found'
+        self.root = self.AddRoot(label, ct_type=ct_type_checkbox)
+        self.SetItemImage(self.root, 0, CT.TreeItemIcon_Normal)
+        self.SetItemImage(self.root, 1, CT.TreeItemIcon_Expanded)
+        self.SetPyData(self.root, testsuites)
+
+        for py, v in testsuites.items():
+            level1 = self.AppendItem(self.root, py, ct_type=ct_type_checkbox)
+            self.SetPyData(level1, v) # v: file name, abspath, python module, python testsuite
+            self.SetItemImage(level1, 0, CT.TreeItemIcon_Normal)
+            self.SetItemImage(level1, 1, CT.TreeItemIcon_Expanded)
+            #level1.Check()
+
+            name, abspath, module, suite = v
+            for clazz in suite:
+                level2 = self.AppendItem(level1, api_unittest.gettestcaseclazzname(clazz), ct_type=ct_type_checkbox)
+                self.SetPyData(level2, clazz)
+                self.SetItemImage(level2, 0, CT.TreeItemIcon_Normal)
+                self.SetItemImage(level2, 1, CT.TreeItemIcon_Expanded)
+                #level2.Check()
+
+                for test_ in clazz:
+                    level3 = self.AppendItem(level2, test_._testMethodName)
+                    self.SetPyData(level3, test_)
+                #self.Expand(level2)
+            self.Expand(level1)
+
+        self.Expand(self.root)
+        #self.root.Check()
+
+    def OnPopup1(self, event):
+        p = self.GetParent()
+        if p:
+            p.OnReload()
+
 
 class ClientPanel(BasicPanel):
     ''' 绘制主界面UI '''
@@ -179,8 +233,8 @@ class ClientPanel(BasicPanel):
         self.reader_combo = wx.ComboBox(self, -1, '', (-1,-1), (-1,-1), map(str, self.readers), style=wx.CB_READONLY)
         self.reset_but = wx.Button(self, -1, 'Reset', (-1, -1))
         self.reader_combo.SetSelection(0)
-        self.reader_combo.Hide()
-        self.reset_but.Hide()
+        #self.reader_combo.Hide()
+        #self.reset_but.Hide()
         self.Bind(wx.EVT_COMBOBOX, self.OnSelectReader, self.reader_combo)
         self.Bind(wx.EVT_BUTTON, self.OnReset, self.reset_but)
 
@@ -200,7 +254,7 @@ class ClientPanel(BasicPanel):
         box1.Add(self.stop_but, 0, wx.EXPAND)
 
         # box2: testsuites, htmls
-        self.testsuites = api_unittest.gettestsuite()
+        self.testsuites = self.GetTestsuites()
         self.testsuites_tree = TestsuiteTreeCtrl(self, -1, testsuites=self.testsuites)
         self.html_nb = wx.aui.AuiNotebook(self, style=wx.aui.AUI_NB_DEFAULT_STYLE)
 
@@ -218,7 +272,7 @@ class ClientPanel(BasicPanel):
         self.gauge.SetValue(0)
 
         self.SetSizer(box)
-        self.GetBestSize()
+        #self.GetBestSize()
 
         # thread
         self.thread, self.t0 = None, 0
@@ -226,6 +280,16 @@ class ClientPanel(BasicPanel):
         self.Bind(EVT_TEST_RESULT, self.OnTestResult)
         self.Bind(EVT_LOAD_HTML, self.OnLoadHtml)
         self.Bind(EVT_TEST_FINISHED, self.OnTestFinished)
+
+    def OnReload(self):
+        self.testsuites_tree.reload(self.GetTestsuites())
+
+    def GetTestsuites(self):
+        try:
+            return api_unittest.gettestsuite()
+        except Exception as e:
+            self.showerror('测试脚本语法不正确，请检查后重新打开测试工具', str(e))
+            return dict()
 
     def OnTestFinished(self, evt):
         self.OnStop()
@@ -317,6 +381,8 @@ class ClientPanel(BasicPanel):
             self.showmsg("读卡器连接成功", name)
         except Exception as e:
             self.showlongmsg('读卡器连接失败', str(e))
+            return
+        api_config.set_default_pcsc_reader_name(name)
 
     def loadhtml(self, path, title):
         nb = self.html_nb
