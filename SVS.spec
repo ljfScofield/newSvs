@@ -22,7 +22,7 @@ exe = EXE(pyz,
           a.zipfiles,
           a.datas,
           name='SVS',
-          debug=False,
+          debug=True,
           strip=False,
           upx=True,
-          console=False , version='versionfile.py', icon='xinghan.ico')
+          console=True , version='versionfile.py', icon='xinghan.ico')

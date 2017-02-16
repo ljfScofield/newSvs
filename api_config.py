@@ -35,7 +35,7 @@ def test_exe_path():
     # test if path to svs.exe contains special characters && chinese
     # For html url, we don't want to get into the trouble of handling non-english characters
     p = os.path.abspath(os.getcwd())
-    r = re.compile(r'^[0-9a-zA-Z_.\\:]+$')
+    r = re.compile(r'^[0-9a-zA-Z-_.\\:]+$')
     m = r.match(p)
     if m:
         return True

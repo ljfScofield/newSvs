@@ -28,6 +28,7 @@ TITLE = u('COS')
 (TestResultEvent, EVT_TEST_RESULT) = wx.lib.newevent.NewEvent()
 (LoadHtmlEvent, EVT_LOAD_HTML) = wx.lib.newevent.NewEvent()
 (TestFinishedEvent, EVT_TEST_FINISHED) = wx.lib.newevent.NewEvent()
+(TestException, EVT_TEST_EXCEPTION) = wx.lib.newevent.NewEvent()
 
 
 #----------------------------------------------------------------------
@@ -48,12 +49,16 @@ class TestThread:
         return self.running
 
     def Run(self):
-        for suite, name, doc in self.testsuites:
-            if self.keepGoing:
-                result, htmlpath = api_unittest.htmlunittest(suite, name, doc, thread_instance=self)
-                self.PostHtml(result, htmlpath, name)
-        self.running = False
-        self.PostTestFinished()
+        try:
+            for suite, name, doc in self.testsuites:
+                if self.keepGoing:
+                    result, htmlpath = api_unittest.htmlunittest(suite, name, doc, thread_instance=self)
+                    self.PostHtml(result, htmlpath, name)
+        except Exception as e:
+            self.PostTestException(e)
+        finally:
+            self.running = False
+            self.PostTestFinished()
 
     def PostTestFinished(self):
         # We communicate with the UI by sending events to it. There can be
@@ -72,6 +77,13 @@ class TestThread:
         # no manipulation of UI objects from the worker thread.
         evt = TestResultEvent()
         evt.result = result
+        wx.PostEvent(self.win, evt)
+
+    def PostTestException(self, exception):
+        # We communicate with the UI by sending events to it. There can be
+        # no manipulation of UI objects from the worker thread.
+        evt = TestException()
+        evt.exception = exception
         wx.PostEvent(self.win, evt)
 
 #----------------------------------------------------------------------
@@ -232,7 +244,8 @@ class ClientPanel(BasicPanel):
         self.readers = api_pcsc.getreaderlist()
         self.reader_combo = wx.ComboBox(self, -1, '', (-1,-1), (-1,-1), map(str, self.readers), style=wx.CB_READONLY)
         self.reset_but = wx.Button(self, -1, 'Reset', (-1, -1))
-        self.reader_combo.SetSelection(0)
+        if self.readers:
+            self.reader_combo.SetSelection(0)
         #self.reader_combo.Hide()
         #self.reset_but.Hide()
         self.Bind(wx.EVT_COMBOBOX, self.OnSelectReader, self.reader_combo)
@@ -280,6 +293,7 @@ class ClientPanel(BasicPanel):
         self.Bind(EVT_TEST_RESULT, self.OnTestResult)
         self.Bind(EVT_LOAD_HTML, self.OnLoadHtml)
         self.Bind(EVT_TEST_FINISHED, self.OnTestFinished)
+        self.Bind(EVT_TEST_FINISHED, self.OnTestException)
 
     def OnReload(self):
         self.testsuites_tree.reload(self.GetTestsuites())
@@ -307,6 +321,10 @@ class ClientPanel(BasicPanel):
                     self.showmsg('测试全部完成', '%d 个测试案例\n用时 %.3f 秒' % (total, t))
                 else:
                     self.showerror('测试部分完成', '已执行 %d/%d 个测试案例\n用时 %.3f 秒' % (executed, total, t))
+
+    def OnTestException(self, evt):
+        self.OnStop()
+        self.showerror('测试出现异常，已终止', str(e))
 
     def OnTestResult(self, evt):
         v = self.gauge.GetValue()

@@ -106,7 +106,10 @@ def getreaderlist():
     ''' Get the list of reader
         Returns a list, for example, ['OMNIKEY CardMan 5x21 0', 'OMNIKEY CardMan 5x21-CL 0']
     '''
-    return smartcard.System.readers()
+    try:
+        return smartcard.System.readers() # will raise exceptions if no reader attatched
+    except:
+        return []
 
 
 def disconnect(cold=True):
@@ -192,14 +195,13 @@ def reset(cold=True):
 def is61xx(sw, expectSW):
     return (expectSW=='9000' and sw[:2]=='61')
 
-
-def formatlog(apdu, response, sw1, sw2, t, name='', info=''):
+def formatapdu(apdu, name='', info=''):
     h, d = apdu[:10], apdu[10:]
     cmd = h+' '+d if d else h
-    if response:
-        return '%s [%s](%.2X%.2X) ; %s, %s, %.3f ms' %(cmd, response, sw1, sw2, name, info, t)
-    else:
-        return '%s(%.2X%.2X) ; %s, %s, %.3f ms' %(cmd, sw1, sw2, name, info, t)
+    return '%s ; %s, %s' % (cmd, name, info)
+
+def formatresponse(response, sw1, sw2, t):
+    return '[%s](%.2X%.2X) ; %.3f ms' %(response, sw1, sw2, t)
 
 
 def send(apdu, expectData='', expectSW='', info='', name=''):
@@ -227,6 +229,8 @@ def send(apdu, expectData='', expectSW='', info='', name=''):
 
 
     conn = getconnection()
+
+    Logger.debug(formatapdu(apdu, name, info))
     t0 = time.clock()
     res, sw1, sw2 = conn.transmit( toBytes(apdu) )
 
@@ -247,7 +251,7 @@ def send(apdu, expectData='', expectSW='', info='', name=''):
     response = tohexstring( res )
     sw = '%.2X%.2X'%(sw1, sw2)
 
-    Logger.debug(formatlog(apdu, response, sw1, sw2, t, name, info))
+    Logger.debug(formatresponse(response, sw1, sw2, t))
 
     dit = {
             'cla' : apdu[:2],
