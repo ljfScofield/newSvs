@@ -29,6 +29,8 @@ u = api_util.u
 class Applet_ETC_ITS_BCTC(object):
     ''' Fake ETC applet '''
 
+    PIN = '1234'
+
     def getcappath(self):
         cap = "ETC_ITS_BCTC.cap"
         return api_unittest.getcappath(cap)
@@ -41,10 +43,17 @@ class Applet_ETC_ITS_BCTC(object):
         instance, pkg, applet = self.getaids()
         return api_gp.select(instance)
 
+    def verifypin(self, pin):
+        lc = len(pin) / 2
+        return api_pcsc.send('00200000%.2X%s' % (lc, pin), expectSW='9000', name='Verify PIN')
+
     def changepin(self, old, new):
         data = old+'FF'+new
         lc = len(data) / 2
-        return api_pcsc.send('805E0100%.2X%s' % (lc, data), expectSW='9000')
+        return api_pcsc.send('805E0100%.2X%s' % (lc, data), expectSW='9000', name='Change PIN')
+
+    def readbinary(self):
+        return api_pcsc.send('00B0950000', expectSW='9000', name='Read Binary')
 
 #----------------------------------------------------------------------------
 class Cloud4700(object):
@@ -324,6 +333,39 @@ class TestCase_ETC_ITS_BCTC(api_unittest.TestCase):
             api_pcsc.reset(cold=False)
             etc.select()
 
+    def test_Electrical_Class_A(self):
+        ''' 与电相关的参数(Class A)测试：应用选择的功耗应符合规范要求,Icc应在0mA至60mA范围内
+
+                测试标准：
+                应用选择的功耗应符合规范要求,Icc应在0mA至60mA范围内
+        '''
+        etc, cloud = self.etc, self.cloud
+        api_pcsc.reset(cold=True)
+        etc.select()
+        etc.verifypin(etc.PIN)
+        api_pcsc.reset(cold=False)
+        etc.select()
+        etc.verifypin(etc.PIN)
+
+    def test_T0_Case2(self):
+        ''' T=0命令方式二测试: 卡应能正确处理命令方式二
+            测试标准：
+            卡应能正确处理命令方式二
+
+            成功初始化Log过程
+            卡复位：ATR= 3B789600000073C84013009000
+            Select Usim:00 A4 04 00 09   Data:A00000000386980701 SW:9000
+            Read Binary:00 B0 95 00 00  SW:6A82
+            Read Binary命令返回状态码错误! 
+        '''
+        etc, cloud = self.etc, self.cloud
+        api_pcsc.reset(cold=True)
+        etc.select()
+        etc.readbinary()
+        api_pcsc.reset(cold=False)
+        etc.select()
+        etc.readbinary()
+
     def test_ClockFrequency_4(self, clk=4):
         ''' 时钟频率范围测试：4 MHz
         '''
@@ -562,8 +604,9 @@ class TestCase_ETC_ITS_BCTC(api_unittest.TestCase):
 
         api_pcsc.reset(cold=False) # 目前无法设置电压为5500mV，暂时用5V热复位替代
         etc.select()
-        etc.changepin('1234', '0000')
-        etc.changepin('0000', '1234')
+        old, new = etc.PIN, '0000'
+        etc.changepin(old, new)
+        etc.changepin(new, old)
 
         # BCTC测试结束
         # 下面是另外增加的测试
@@ -575,8 +618,9 @@ class TestCase_ETC_ITS_BCTC(api_unittest.TestCase):
 
         api_pcsc.reset(cold=True) # 目前无法设置电压为5500mV，暂时用5V冷复位替代
         etc.select()
-        etc.changepin('1234', '0000')
-        etc.changepin('0000', '1234')
+        old, new = etc.PIN, '0000'
+        etc.changepin(old, new)
+        etc.changepin(new, old)
 
     def test_Voltage_Class_B(self):
         ''' 电压限值测试 - 3V

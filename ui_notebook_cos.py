@@ -56,9 +56,11 @@ class TestThread:
                     self.PostHtml(result, htmlpath, name)
         except Exception as e:
             self.PostTestException(e)
+            return
         finally:
             self.running = False
-            self.PostTestFinished()
+
+        self.PostTestFinished()
 
     def PostTestFinished(self):
         # We communicate with the UI by sending events to it. There can be
@@ -293,7 +295,7 @@ class ClientPanel(BasicPanel):
         self.Bind(EVT_TEST_RESULT, self.OnTestResult)
         self.Bind(EVT_LOAD_HTML, self.OnLoadHtml)
         self.Bind(EVT_TEST_FINISHED, self.OnTestFinished)
-        self.Bind(EVT_TEST_FINISHED, self.OnTestException)
+        self.Bind(EVT_TEST_EXCEPTION, self.OnTestException)
 
     def OnReload(self):
         self.testsuites_tree.reload(self.GetTestsuites())
@@ -324,7 +326,7 @@ class ClientPanel(BasicPanel):
 
     def OnTestException(self, evt):
         self.OnStop()
-        self.showerror('测试出现异常，已终止', str(e))
+        self.showerror('测试出现异常，已终止', str(evt.exception))
 
     def OnTestResult(self, evt):
         v = self.gauge.GetValue()

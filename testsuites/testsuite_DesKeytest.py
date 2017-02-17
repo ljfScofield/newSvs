@@ -1,7 +1,7 @@
 #!/usr/env python
 # -*- coding: utf-8 -*-
 
-""" ºÏ≤‚JavaCard±Í◊º÷–Œ¥√˜»∑µƒÃÿ–‘°¢±ﬂΩÁÃıº˛
+""" Ê£ÄÊµãJavaCardÊ†áÂáÜ‰∏≠Êú™ÊòéÁ°ÆÁöÑÁâπÊÄß„ÄÅËæπÁïåÊù°‰ª∂
 
 This script will check if personalization data compliants with customer requirment.
 
@@ -19,6 +19,7 @@ import logging, os, webbrowser, unittest
 import api_pcsc
 import api_util
 import api_unittest
+import random
 
 import api_gp
 
@@ -58,8 +59,8 @@ class DESKEY(object):
     def update(self):
         return api_pcsc.send('0006000000' , name='update')
         
-    def getAlgorithm(self):
-        return api_pcsc.send('0007000001' , name='getAlgorithm')
+    def getAlgorithm(self, mode):
+        return api_pcsc.send('000700%.2X01' %mode ,name='getAlgorithm')
         
     def clearKey(self, nkey):         #0 : des_64 1:des_128 2:des_192
         return api_pcsc.send('0008%.2X0000' %nkey , name='clearKey')
@@ -107,22 +108,71 @@ class TestCase_DESKEY(api_unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_0_buildKey(self):
-        ''' test if all 3-des-key-length are supported '''
+    def test_00_buildKey_64des(self, index=0, lgth=64, label = '64des'):
+        des = self.des
+        des.select()
+        r, sw = des.buildKey(index, lgth)
+        self.assertEqual(sw, '9000', label + ' not supported')
+        
+    def test_01_buildKey_128des(self, index=1, lgth=128 , label = '128des'):
+        self.test_00_buildKey_64des(index,lgth,label)
+    
+    def test_02_buildKey_192des(self, index=2, lgth= 192 , label = '192des'):
+        self.test_00_buildKey_64des(index,lgth,label)
+    
+    
+    def test_11_getInstance_ALG_DES_CBC_NOPAD(self, index=0, alg=1, label='ALG_DES_CBC_NOPAD'):
+        des = self.des
+        des.select()
+        r, sw = des.buildCipher(index, alg)
+        self.assertEqual(sw, '9000', label + ' not supported')
+            
+    def test_12_getInstance_ALG_DES_CBC_ISO9797_M1(self, index=1, alg=2, label='ALG_DES_CBC_ISO9797_M1'):
+        self.test_11_getInstance_ALG_DES_CBC_NOPAD(index, alg, label)
+                  
+    def test_13_getInstance_ALG_DES_CBC_ISO9797_M2(self, index=2, alg=3, label='ALG_DES_CBC_ISO9797_M2'):
+        self.test_11_getInstance_ALG_DES_CBC_NOPAD(index, alg, label)
+        
+    def test_14_getInstance_ALG_DES_CBC_ISO9797_M1(self, index=3, alg=4, label='ALG_DES_CBC_PKCS5'):
+        self.test_11_getInstance_ALG_DES_CBC_NOPAD(index, alg, label)
+                  
+    def test_15_getInstance_ALG_DES_ECB_NOPAD(self, index=4, alg=5, label='ALG_DES_ECB_NOPAD'):
+        self.test_11_getInstance_ALG_DES_CBC_NOPAD(index, alg, label)
+    
+    def test_16_getInstance_ALG_DES_ECB_ISO9797_M1(self, index=5, alg=6, label='ALG_DES_ECB_ISO9797_M1'):
+        self.test_11_getInstance_ALG_DES_CBC_NOPAD(index, alg, label)
+        
+    def test_17_getInstance_ALG_DES_ECB_ISO9797_M2(self, index=6, alg=7, label='ALG_DES_ECB_ISO9797_M2'):
+        self.test_11_getInstance_ALG_DES_CBC_NOPAD(index, alg, label)
+        
+    def test_18_getInstance_ALG_DES_ECB_PKCS5(self, index=7, alg=8, label='ALG_DES_ECB_PKCS5'):
+        self.test_11_getInstance_ALG_DES_CBC_NOPAD(index, alg, label)
+                  
+    def test_19_setKey(self):
+        ''' test if setKey is supported '''
         des = self.des
         des.select()
         for i, x in enumerate((64, 128, 192)):
-            r, sw = des.buildKey(i, x)
-            if sw=='9000':
-                self.logger.info('DESKEY length %d supported' %x)
-            else:
-                self.logger.info('DESKEY length %d NOT supported' %x)
-                
-    def test_1_buildCipher(self):
-        ''' test if all 8-modepadding are supported '''
+            r, sw = des.setKey(i, '00'*(x/8))
+            if sw != '9000':
+                self.logger.info('seticv fail')
+            
+    def test_20_seticv(self):
+        ''' set icv '''
         des = self.des
         des.select()
-        allsupported = True
+        lst = ['%.2X'%random.randint(0,255) for i in range(8)]
+        icv = ''.join(lst)
+        r, sw = des.seticv(icv)
+        if sw == '9000':
+            self.logger.info('seticv success')
+        else:
+            self.logger.info('seticv fail')
+
+    def test_22_getAlgorithm(self):
+        ''' test if supported getAlgorithm'''
+        des = self.des
+        des.select()
         for i, t in enumerate((
             ('ALG_DES_CBC_NOPAD', 0x1), 
             ('ALG_DES_CBC_ISO9797_M1', 0x2), 
@@ -134,50 +184,150 @@ class TestCase_DESKEY(api_unittest.TestCase):
             ('ALG_DES_ECB_PKCS5', 0x8),
             )):
             name, value = t
-            r, sw = des.buildCipher(i, value)
-            #self.assertEqual(sw, '9000', 'cipher pading NOT supported %s' %name)
-            if sw=='9000':
-                self.logger.info('cipher pading supported %s' %name)
+            des.buildCipher(i, value)
+            r, sw = des.getAlgorithm(i)
+            if sw == '9000':
+                self.logger.info('getAlgorithm success %s call %s',r ,name)
             else:
-                allsupported = False
-                self.logger.info('cipher pading NOT supported %s' %name)
+                self.logger.info('getAlgorithm fail ')
                 
-        if not allsupported:
-            self.fail("NOT all 8 modes are supported")
-            
-    def test_setKey(self):
-        ''' test if setKey is supported '''
+    def test_23_initEnc_cbc(self):
+        ''' test if init is supported'''
+        des = self.des
+        des.select()    
+        for i, t in enumerate((
+            ('ALG_DES_CBC_NOPAD', 0x1), 
+            ('ALG_DES_CBC_ISO9797_M1', 0x2), 
+            ('ALG_DES_CBC_ISO9797_M2', 0x3), 
+            ('ALG_DES_CBC_PKCS5', 0x4), 
+            )):
+            name, value = t
+            for j in range(3):
+                des.chooseKey(j)
+                r,sw = des.initEnc(0x00,i)
+                if sw == '9000':
+                    self.logger.info('init enc_cbc success %s', name)
+                else:
+                    self.logger.info('init enc_cbc fail %s', name)
+
+    def test_24_initEnc_ebc(self):
+        ''' test if init is supported'''
         des = self.des
         des.select()
-        for i, x in enumerate((64, 128, 192)):
-            r, sw = des.setKey(i, '00'*(x/8))
-            if sw != '9000':
-                self.logger.info('seticv fail')
-            
-    def test_seticv(self):
-        ''' set icv '''
+        for i, t in enumerate((
+            ('ALG_DES_ECB_NOPAD', 0x5), 
+            ('ALG_DES_ECB_ISO9797_M1', 0x6), 
+            ('ALG_DES_ECB_ISO9797_M2', 0x7), 
+            ('ALG_DES_ECB_PKCS5', 0x8), 
+            )):
+            name, value = t
+            for j in range(3):
+                des.chooseKey(j)
+                r,sw = des.initEnc(0x01,i+4)
+                if sw == '9000':
+                    self.logger.info('init enc_ecb success %s', name)
+                else:
+                    self.logger.info('init enc_ecb fail %s', name)
+                    
+    def test_25_dofinal_cbc(self):
+        ''' test if dofinal is supported '''
         des = self.des
         des.select()
-        icv = '0101010101010101'
-        r, sw = des.seticv(icv)
-        if sw == '9000':
-            self.logger.info('seticv success')
-        else:
-            self.logger.info('seticv fail')
+        lst = ['%.2X'%random.randint(0,255) for i in range(8)]
+        buf = ''.join(lst)
+        for i, t in enumerate((
+            ('ALG_DES_ECB_NOPAD', 0x5), 
+            ('ALG_DES_ECB_ISO9797_M1', 0x6), 
+            ('ALG_DES_ECB_ISO9797_M2', 0x7), 
+            ('ALG_DES_ECB_PKCS5', 0x8), 
+            )):
+            name, value = t
+            for j in range(3):
+                des.chooseKey(j)
+                des.initEnc(0x01,i+4)
+                r,sw = des.dofinal(buf)
+                if sw == '9000':
+                    self.logger.info('dofinal enc_cbc success %s', name)
+                else:
+                    self.logger.info('dafinal enc_cbc fail %s', name)
+                    
+    def test_26_dofinal_ecb(self):
+        ''' test if dofinal is supported '''
+        des = self.des
+        des.select()
+        lst = ['%.2X'%random.randint(0,255) for i in range(8)]
+        buf = ''.join(lst)
+        for i, t in enumerate((
+            ('ALG_DES_ECB_NOPAD', 0x5), 
+            ('ALG_DES_ECB_ISO9797_M1', 0x6), 
+            ('ALG_DES_ECB_ISO9797_M2', 0x7), 
+            ('ALG_DES_ECB_PKCS5', 0x8), 
+            )):
+            name, value = t
+            for j in range(3):
+                des.chooseKey(j)
+                des.initEnc(0x01,i+4)
+                r,sw = des.dofinal(buf)
+                if sw == '9000':
+                    self.logger.info('dofinal enc_ecb success %s', name)
+                else:
+                    self.logger.info('dafinal enc_ecb fail %s', name)
+                    
+                    
+    def test_27_dec_dofinal_cbc(self):
+        ''' test if dofinal is supported '''
+        des = self.des
+        des.select()
+        lst = ['%.2X'%random.randint(0,255) for i in range(8)]
+        buf = ''.join(lst)
+        for i, t in enumerate((
+            ('ALG_DES_ECB_NOPAD', 0x5), 
+            ('ALG_DES_ECB_ISO9797_M1', 0x6), 
+            ('ALG_DES_ECB_ISO9797_M2', 0x7), 
+            ('ALG_DES_ECB_PKCS5', 0x8), 
+            )):
+            name, value = t
+            for j in range(3):
+                des.chooseKey(j)
+                des.initDec(0x01,i+4)
+                r,sw = des.dofinal(buf)
+                if sw == '9000':
+                    self.logger.info('dofinal enc_cbc success %s', name)
+                else:
+                    self.logger.info('dafinal enc_cbc fail %s', name)
+                    
+    def test_28_dec_dofinal_ecb(self):
+        ''' test if dofinal is supported '''
+        des = self.des
+        des.select()
+        lst = ['%.2X'%random.randint(0,255) for i in range(8)]
+        buf = ''.join(lst)
+        for i, t in enumerate((
+            ('ALG_DES_ECB_NOPAD', 0x5), 
+            ('ALG_DES_ECB_ISO9797_M1', 0x6), 
+            ('ALG_DES_ECB_ISO9797_M2', 0x7), 
+            ('ALG_DES_ECB_PKCS5', 0x8), 
+            )):
+            name, value = t
+            for j in range(3):
+                des.chooseKey(j)
+                des.initDec(0x01,i+4)
+                r,sw = des.dofinal(buf)
+                if sw == '9000':
+                    self.logger.info('dofinal enc_ecb success %s', name)
+                else:
+                    self.logger.info('dafinal enc_ecb fail %s', name)
     
-    def test_chooseKey(self):
-        ''' set chooseKey '''
+    
+    def test_29_clearKey(self):
+        ''' test if supported clearKey '''
         des = self.des
-        des.select()
-        nkey = 0x00
-        r, sw = des.chooseKey(nkey)
-        if sw == '9000':
-            self.logger.info('chooseKey success')
-        else:
-            self.logger.info('chooseKey fail %s',sw)
-         
-    def test_initEnc(self):
-        ''' test if init enc is supported '''
-        des = self.des
-        des.select()
-        
+        des.select()   
+        for j in range(3):
+            r, sw = des.clearKey(j)
+            self.assertEqual(sw, '9000', 'failed to clear key after setkey')    
+            r, sw = des.clearKey(j)
+            self.assertEqual(sw, '9000', 'failed to clear key again after clear key')    
+            for i in range(10):
+                r, sw = des.clearKey(j)
+                self.assertEqual(sw, '9000', 'failed to clear key for 10 times')    
