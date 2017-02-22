@@ -80,12 +80,14 @@ VERBOSITY = api_config.CONFIG.getint(__name__, 'verbosity')
 #----------------------------------------------------------------------------
 def htmlunittest(testsuite, html_title, html_description, html_path=None, logging_level=None, verbosity=None, thread_instance=None):
     ''' '''
-    title = html_title
     if type(html_title) != type(u''):
-        title = html_title.decode('utf-8')
-    description = html_description
+        title = html_title.decode('utf-8') if html_title else '' # more robotness
+    else:
+        title = html_title
     if type(html_description) != type(u''):
-        description = html_description.decode('utf-8')
+        description = html_description.decode('utf-8') if html_description else '' # more robotness
+    else:
+        description = html_description
 
     html_path = html_path if html_path else os.path.join(HTML_PATH, html_title+'.html')
     logging_level = logging_level if logging_level else LOGGING_LEVEL
@@ -178,6 +180,7 @@ def gettestsuite():
             module = importmodule1(name, open(x, 'rb'), x)
         except Exception as e:
             error = "Invalid test script file: %s\nplease correct its synatx error:\n%s" % (x, str(e))
+            print error
             Logger.error(error)
             raise SyntaxError(error)
 

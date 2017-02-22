@@ -1,7 +1,7 @@
 #!/usr/env python
 # -*- coding: utf-8 -*-
 
-import os, time, urllib, thread
+import os, time, urllib, thread, traceback
 
 import wx
 import wx.lib.dialogs
@@ -52,10 +52,11 @@ class TestThread:
         try:
             for suite, name, doc in self.testsuites:
                 if self.keepGoing:
+                    doc = doc if doc else ''
                     result, htmlpath = api_unittest.htmlunittest(suite, name, doc, thread_instance=self)
                     self.PostHtml(result, htmlpath, name)
         except Exception as e:
-            self.PostTestException(e)
+            self.PostTestException(e, traceback.format_exc(e))
             return
         finally:
             self.running = False
@@ -81,11 +82,12 @@ class TestThread:
         evt.result = result
         wx.PostEvent(self.win, evt)
 
-    def PostTestException(self, exception):
+    def PostTestException(self, exception, msg=None):
         # We communicate with the UI by sending events to it. There can be
         # no manipulation of UI objects from the worker thread.
         evt = TestException()
         evt.exception = exception
+        evt.msg = msg
         wx.PostEvent(self.win, evt)
 
 #----------------------------------------------------------------------
@@ -326,7 +328,7 @@ class ClientPanel(BasicPanel):
 
     def OnTestException(self, evt):
         self.OnStop()
-        self.showerror('测试出现异常，已终止', str(evt.exception))
+        self.showerror('测试出现异常，已终止', evt.msg)
 
     def OnTestResult(self, evt):
         v = self.gauge.GetValue()
