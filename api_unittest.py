@@ -180,7 +180,6 @@ def gettestsuite():
             module = importmodule1(name, open(x, 'rb'), x)
         except Exception as e:
             error = "Invalid test script file: %s\nplease correct its synatx error:\n%s" % (x, str(e))
-            print error
             Logger.error(error)
             raise SyntaxError(error)
 
