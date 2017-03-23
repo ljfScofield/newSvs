@@ -8,29 +8,32 @@ import wx.lib.dialogs
 import wx.lib.agw.customtreectrl as CT
 import wx.html2 as webview
 import wx.aui
+import string
 
 import api_pcsc
 import api_util
-import api_unittest
 import api_config
-
+import ui_notebook_cos
+import api_unittest
+import ui_client
+import api_print
+import MySQLdb
 #----------------------------------------------------------------------
 # define API
 u = api_util.u
-
-
+VisualCard = api_print.VisualCard
 MsgDlg = wx.lib.dialogs.ScrolledMessageDialog
+Printer = None
 
-TITLE = u('COS')
-
+TITLE = u('SIM')
 
 #----------------------------------------------------------------------
-
 # This creates a new Event class and a EVT binder function
 (TestResultEvent, EVT_TEST_RESULT) = wx.lib.newevent.NewEvent()
 (LoadHtmlEvent, EVT_LOAD_HTML) = wx.lib.newevent.NewEvent()
 (TestFinishedEvent, EVT_TEST_FINISHED) = wx.lib.newevent.NewEvent()
 (TestException, EVT_TEST_EXCEPTION) = wx.lib.newevent.NewEvent()
+(SimUiEvent, EVT_SIM_UI) = wx.lib.newevent.NewEvent() #事件类型，绑定对象
 
 
 #----------------------------------------------------------------------
@@ -91,6 +94,12 @@ class TestThread:
         evt.exception = exception
         evt.msg = msg
         wx.PostEvent(self.win, evt)
+        
+    def PostSimUiEvent(self, texts, barcodes):
+        evt= SimUiEvent()
+        evt.texts = texts
+        evt.barcodes = barcodes
+        wx.PostEvent(self.win, evt)
 
 #----------------------------------------------------------------------
 class BasicPanel(wx.Panel):
@@ -114,8 +123,57 @@ class BasicPanel(wx.Panel):
         dlg.ShowModal()
         dlg.Destroy()
 
-#----------------------------------------------------------------------
 
+
+#----------------------------------------------------------------------
+def Mysqldata(order, iccid, pin1 , puk1, hlr, PRINT_REGION):
+    ''' 测试Mysqldata数据:        
+        order: 订单号
+        PRINT_ICCID: 
+        PRINT_HLR:
+        pin1PRINT_PIN1:
+        PRINT_PUK1：
+        PRINT_REGION
+        printer: 测试软件提供的虚拟打印机，用于打印文本、条形码到虚拟卡面
+    '''
+    # 2. 打印版面：文本、条形码
+    w, h = Printer.getwidthheight()
+    x, y = Printer.getsmallcardposition()
+    w1, h1 = Printer.getsmallcardwidthheight()
+    telcel_texts = [
+            ('PIN1: '+pin1 + '    PUK1: '+puk1, (w*0.5, h*0.1)),
+            (iccid[:10], (x+w1*0.3, y+h1*0.1)),
+            (hlr,        (x+w1*0.6, y+h1*0.3)),
+            (iccid[10:], (x+w1*0.3, y+h1*0.6)),
+            (iccid[:-1] +'  '+ hlr+' '+ PRINT_REGION, (w*0.1, h*0.9)),
+            ]
+    barcodes = [
+            # 内容、位置、编码格式
+            (iccid[:-1], (w*0.1, h*0.6), 'CODE128'),
+            ]
+    visual = VisualCard(Printer)
+    visual.settexts(telcel_texts).setbarcodes(barcodes)
+
+#------------------------------------------------------------------------
+def cleanPrinter():
+    ''' clean 测试软件提供的虚拟打印机，用于打印文本、条形码到虚拟卡面
+    '''
+    # 2. 打印版面：文本、条形码
+    w, h = Printer.getwidthheight()
+    x, y = Printer.getsmallcardposition()
+    w1, h1 = Printer.getsmallcardwidthheight()
+    telcel_texts = [('',(w*0.5, h*0.1)),
+                    ('', (x+w1*0.3, y+h1*0.1)),
+                    ('',        (x+w1*0.6, y+h1*0.3)),
+                    ('', (x+w1*0.3, y+h1*0.6)),
+                    ('', (w*0.1, h*0.9)),
+                   ]
+    barcodes = [('',(w*0.1, h*0.6),'CODE128'),] 
+    visual = VisualCard(Printer)
+    visual.settexts(telcel_texts).setbarcodes(barcodes) 
+
+
+#----------------------------------------------------------------------
 ArtIDs = [
     wx.ART_FOLDER,
     wx.ART_FOLDER_OPEN,
@@ -142,7 +200,7 @@ class TestsuiteTreeCtrl(CT.CustomTreeCtrl):
                  size=wx.DefaultSize,
                  style=wx.SUNKEN_BORDER|wx.WANTS_CHARS,
                  agwStyle=CT.TR_HAS_BUTTONS|CT.TR_AUTO_CHECK_CHILD|CT.TR_AUTO_CHECK_PARENT,
-                 rootlabel='Testsuites',
+                 rootlabel='sim_Testsuites',
                  testsuites={},
                  ):
         CT.CustomTreeCtrl.__init__(self, parent, id, pos, size, style, agwStyle)
@@ -159,7 +217,7 @@ class TestsuiteTreeCtrl(CT.CustomTreeCtrl):
         self.root = self.AddRoot(label, ct_type=ct_type_checkbox)
         self.SetItemImage(self.root, 0, CT.TreeItemIcon_Normal)
         self.SetItemImage(self.root, 1, CT.TreeItemIcon_Expanded)
-        self.SetPyData(self.root,testsuites)
+        self.SetPyData(self.root, testsuites)
 
         for py, v in testsuites.items():
             level1 = self.AppendItem(self.root, py, ct_type=ct_type_checkbox)
@@ -258,10 +316,23 @@ class ClientPanel(BasicPanel):
         self.Bind(wx.EVT_BUTTON, self.OnReset, self.reset_but)
 
         self.gauge = wx.Gauge(self, -1, 300)#
-        self.start_but = wx.Button(self, -1, 'Start', (-1, -1))
-        self.stop_but = wx.Button(self, -1, 'Stop', (-1, -1))
+        self.start_but = wx.Button(self, -1, '开始', (-1, -1))
+        self.stop_but = wx.Button(self, -1, '停止', (-1, -1))
 
-               
+        self.txt_but = wx.TextCtrl(self, -1, "", size=(650, -1),style=wx.TE_RICH2) #iccid文本
+        self.txt_but.SetStyle(0, 32, wx.TextAttr("", "white"))      
+        self.txt_iccid = wx.StaticText(self, -1, "ICCID:")
+        self.txt_but1 = wx.TextCtrl(self, -1, "", size=(650, -1),style=wx.TE_RICH2)#单号文本
+        self.txt_but1.SetStyle(0, 32, wx.TextAttr("", "white"))
+        self.txt_data = wx.StaticText(self, -1, "工单号:")
+        
+        sb = wx.StaticBox(self, -1, "期待版面：")  #版面box
+        sbsizer = wx.StaticBoxSizer(sb, wx.VERTICAL)
+        global Printer
+        Printer = ui_client.PrinterPanel(sb)
+        sbsizer.Add(Printer, 0) 
+
+                
         self.gauge.SetValue(0)
         self.Bind(wx.EVT_BUTTON, self.OnStart, self.start_but)
         self.Bind(wx.EVT_BUTTON, self.OnStop, self.stop_but)
@@ -273,21 +344,37 @@ class ClientPanel(BasicPanel):
         box1.Add(self.gauge, 1, wx.EXPAND)
         box1.Add(self.start_but, 0, wx.EXPAND)
         box1.Add(self.stop_but, 0, wx.EXPAND)
-
+      
         
+        box3 = wx.BoxSizer(wx.HORIZONTAL)
+        box3.Add(self.txt_iccid, 1, wx.EXPAND)
+        box3.Add(self.txt_but, 1, wx.EXPAND)        
+        box3.Add(self.txt_data, 1, wx.EXPAND) 
+        box3.Add(self.txt_but1, 1, wx.EXPAND)
+        
+
        # box2: testsuites, htmls
         self.testsuites = self.GetTestsuites()
         self.testsuites_tree = TestsuiteTreeCtrl(self, -1, testsuites=self.testsuites)
         self.html_nb = wx.aui.AuiNotebook(self, style=wx.aui.AUI_NB_DEFAULT_STYLE)
+        
+        box4 = wx.BoxSizer(wx.VERTICAL)         
+        box4.Add(self.testsuites_tree, 1, wx.EXPAND)
+        box4.Add(sbsizer, 1, wx.EXPAND)
+        
 
         box2 = wx.BoxSizer(wx.HORIZONTAL)
-        box2.Add(self.testsuites_tree, 1, wx.EXPAND)
-        box2.Add(self.html_nb, 4, wx.EXPAND)
+        box2.Add(box4, 3, wx.EXPAND)
+        box2.Add(self.html_nb, 5, wx.EXPAND)
+        
+
 
         # finally
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(box1, 0, wx.EXPAND)
+        box.Add(box3, 0, wx.BOTTOM)
         box.Add(box2, 1, wx.EXPAND)
+        
 
         self.start_but.Enable()
         self.stop_but.Disable()
@@ -303,13 +390,14 @@ class ClientPanel(BasicPanel):
         self.Bind(EVT_LOAD_HTML, self.OnLoadHtml)
         self.Bind(EVT_TEST_FINISHED, self.OnTestFinished)
         self.Bind(EVT_TEST_EXCEPTION, self.OnTestException)
+        self.Bind(EVT_SIM_UI, self.OnSIMUI)
 
     def OnReload(self):
         self.testsuites_tree.reload(self.GetTestsuites())
 
     def GetTestsuites(self):
         try:
-            return api_unittest.gettestsuite()
+            return api_unittest.gettestsuite_sim()
         except Exception as e:
             self.showerror('测试脚本语法不正确，请检查后重新打开测试工具', str(e))
             return dict()
@@ -342,6 +430,12 @@ class ClientPanel(BasicPanel):
     def OnLoadHtml(self, evt):
         result, htmlpath, title = evt.result, evt.htmlpath, evt.title
         self.loadhtml(htmlpath, title)
+        
+    def OnSIMUI(self, evt):
+        texts, barcodes = evt.texts, evt.barcodes
+        Printer.settexts(texts)
+        Printer.setbarcodes(barcodes)
+        #
 
     def stopthread(self):
         if self.thread:
@@ -356,12 +450,26 @@ class ClientPanel(BasicPanel):
     def OnCloseWindow(self, evt):
         self.stopthread()
         self.Destroy()
+            
 
-    def OnStart(self, event):
+    def OnStart(self, event):         
         if not api_config.test_exe_path():
             self.showerror('配置错误', '%s\n请不要将svs.exe放在中文等特殊路径，建议放在纯英文路径' % os.path.abspath(os.getcwd()))
             return
 
+        order = self.txt_but1.GetValue()
+        iccid = self.txt_but.GetValue()
+        if order == '' or iccid == '' or not(all([c in string.hexdigits for c in iccid])) :
+            self.showerror("错误",'请输入正确的ICCID和订单号')  
+            return
+ 
+        try:
+            self.SetMysqlDatas(iccid, order)
+        except Exception as e:            
+            self.showerror("Set Mysql data error", str(e))
+            #cleanPrinter()
+            return
+            
         self.start_but.Disable()
         self.stop_but.Enable()
 
@@ -386,7 +494,32 @@ class ClientPanel(BasicPanel):
 
         self.t0 = time.clock()
         self.thread = TestThread(self, lst)
-        self.thread.Start()
+        self.thread.Start()    
+        
+       
+    def SetMysqlDatas(self, iccid, order):  
+        ip, name, pwd, db = api_config.get_mysql_params()
+        ksql = "SELECT * FROM sim" 
+        dsql = "SELECT * FROM sim WHERE ICCID = '%s'" % (iccid)
+
+        try:
+            db = MySQLdb.connect(ip, name, pwd, db)
+            cursor = db.cursor()
+            cursor.execute(ksql)
+            keys = [tuple[0] for tuple in cursor.description] # a tuple, ('ICCID', )
+            
+            cursor.execute(dsql)
+            datas = cursor.fetchall()[0] # a list, ['89', ]             
+            
+        except:
+            print "research mysql data exception"           
+            raise
+        finally:             
+            db.close()
+        
+        api_config.set_mysql_keys(keys)
+        api_config.set_mysql_datas(datas)
+        return True
 
     def OnStop(self, event=None):
         self.start_but.Enable()
@@ -433,4 +566,6 @@ class ClientPanel(BasicPanel):
     def OnWebViewError(self, evt):
         with open('EVT_WEBVIEW_ERROR.txt', 'wb') as fp:
             fp.write(evt.GetString())
+            
+  
 

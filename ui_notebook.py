@@ -5,6 +5,7 @@ import wx
 
 import api_util
 import ui_notebook_cos
+import ui_notebook_sim
 
 #----------------------------------------------------------------------
 # define API
@@ -19,13 +20,16 @@ class TestNB(wx.Notebook):
 
         # layout
         self.AddPage(ui_notebook_cos.ClientPanel(self), ui_notebook_cos.TITLE)
-
+        self.AddPage(ui_notebook_sim.ClientPanel(self), ui_notebook_sim.TITLE)
+        
         box = wx.BoxSizer(wx.HORIZONTAL)
         self.SetSizer(box)
         self.GetBestSize()
 
 
 #----------------------------------------------------------------------
+
+
 
 def runTest(frame, nb, log):
     win = TestNB(nb, -1, log)

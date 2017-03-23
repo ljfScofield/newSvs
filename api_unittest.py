@@ -28,6 +28,10 @@ class TestCase(unittest.TestCase):
     def __init__(self, methodName):
         unittest.TestCase.__init__(self, methodName)
         self.logger = logging.getLogger(self.__class__.__name__) # to simplify logging operations while testing
+        
+    def run(self, result=None, thread_instance=None):   
+        self.thread_instance = thread_instance
+        unittest.TestCase.run(self, result=result)
 
 class TestLoader(unittest.TestLoader):
     pass
@@ -56,7 +60,7 @@ class TestSuite(unittest.TestSuite):
                     continue
 
             if not debug:
-                test(result)
+                test(result, thread_instance=thread_instance)
                 if thread_instance:
                     if unittest.suite._isnotsuite(test):
                         thread_instance.PostTestResult(result)
@@ -156,12 +160,48 @@ def importmodule1(name, fp, fppath, description=('.py', 'U', 1)):
 
 def getcappath(name):
     cfg = api_config.CONFIG
-    root = cfg.get(__name__, 'root')
+    root = cfg.get(__name__, 'cos_root')
     return os.path.join(root, name)
 
 def gettestsuite():
     cfg = api_config.CONFIG
-    root = cfg.get(__name__, 'root')
+    root = cfg.get(__name__, 'cos_root')
+    #fp = open('svs_log.txt', 'wb')
+    add_to_sys_modules = cfg.getboolean(__name__, 'add_to_sys_modules')
+    prefix = cfg.get(__name__, 'prefix')
+    suffix = cfg.get(__name__, 'suffix')
+
+    lst = filter(lambda x:x.startswith(prefix) and x.endswith(suffix), os.listdir(root))
+    lst = map(lambda x:os.path.abspath(os.path.join(root, x)), lst)
+    lst = filter(os.path.isfile, lst)
+
+    dit = collections.OrderedDict()
+    for x in lst:
+        tail = os.path.split(x)[1]
+        name = tail[:-len(suffix)]
+        try:
+            #module = importmodule(open(x, 'rb').read(), name, add_to_sys_modules)
+            module = importmodule1(name, open(x, 'rb'), x)
+        except Exception as e:
+            error = "Invalid test script file: %s\nplease correct its synatx error:\n%s" % (x, str(e))
+            Logger.error(error)
+            raise SyntaxError(error)
+
+        suite = TestLoader().loadTestsFromModule(module)
+        if suite:
+            total = sum(map(lambda x:x.countTestCases(), suite))
+            if total:
+                dit[name] = (name, x, module, suite) # file name, abspath, python module, python testsuite
+            else:
+                Logger.error("No test_XXXX found in %s, please make sure your have written any test methods in it" % x)
+        else:
+            Logger.error("No Testcase sub-class found in %s, please make sure you have the right test script" % x)
+
+    return dit
+    
+def gettestsuite_sim():
+    cfg = api_config.CONFIG
+    root = cfg.get(__name__, 'sim_root')
     #fp = open('svs_log.txt', 'wb')
     add_to_sys_modules = cfg.getboolean(__name__, 'add_to_sys_modules')
     prefix = cfg.get(__name__, 'prefix')

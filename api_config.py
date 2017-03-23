@@ -16,7 +16,6 @@ Author: wg@china-xinghan.com
 
 import logging, os, ConfigParser, re
 
-################################################################################
 PATH = r'.\config.ini'
 
 CONFIG = ConfigParser.RawConfigParser(allow_no_value=True)
@@ -25,7 +24,7 @@ CONFIG.read(PATH)
 def self_test():
     abspath = os.path.abspath(PATH)
     if os.path.exists(abspath):
-        for x in ('__main__', 'api_pcsc', 'api_util', 'api_unittest'):
+        for x in ('__main__', 'api_pcsc', 'api_util', 'api_unittest', 'mysql'):
             if not x in CONFIG.sections():
                 logging.error("Cannot find the 'main' section in configuration file: %s" % abspath)
     else:
@@ -46,12 +45,40 @@ def test_exe_path():
 def set_default_pcsc_reader_name(name):
     CONFIG.set('api_pcsc', 'defaultreadername', name) # this setting will not be saved to .ini file.
 
-self_test()
-
 def get_default_pcsc_reader_name():
     return CONFIG.get('api_pcsc', 'defaultreadername')
+    
+      
+def get_mysql_params():
+    '''Returns IP, username, password, db name'''
+    return [CONFIG.get('mysql', x) for x in ('ip', 'username', 'password', 'db')]
+
+Datas = []
+Keys = []
+#dicts = {}
+
+def set_mysql_datas(datas):
+    global Datas
+    Datas = datas
+    
+    
+def set_mysql_keys(keys):
+    global Keys
+    Keys = keys
+   
+def get_mysql_dict():
+    global Datas
+    global Keys
+    #global dicts
+    dicts = dict(zip(Keys, Datas))    
+    return dicts
+   
+    
+self_test()
+    
 
 ################################################################################
 if __name__=='__main__':
     self_test()
+     
 
